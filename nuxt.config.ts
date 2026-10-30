@@ -16,9 +16,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      // Isi lewat file .env (lihat .env.example)
-      supabaseUrl: "",
-      supabaseKey: "",
+      // Boleh ditaruh di sini karena ini URL + publishable key (memang terbuka di browser).
+      // JANGAN isi dengan service_role / secret key.
+      supabaseUrl: "https://ojbgkxpkboplhioqaasc.supabase.co",
+      supabaseKey: "sb_publishable_ISI_KEY_KAMU",
       // Situs reseller webinvit.id (sumber tema, kategori, portofolio)
       sellerSite: "https://lunaviadigital.webinvit.id",
       waNumber: "6283862715772",
