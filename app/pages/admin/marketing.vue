@@ -7,7 +7,7 @@ definePageMeta({
 
 // Alamat portal reseller tempat tombol "Get Tool" mengarah.
 // Samakan dengan alamat di browser saat kamu membuka halaman Marketing Tools di portal.
-const PORTAL_URL = "https://webinvit.id";
+const PORTAL_URL = "https://satumomen.com";
 const ASSET_URL = "https://assets.satumomen.com/";
 
 const TOOLS = [
