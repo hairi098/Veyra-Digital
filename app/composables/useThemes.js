@@ -26,7 +26,8 @@ export function fetchAPI(url, opts) {
       })
       .catch((err) => {
         if (err && err.name === "AbortError") throw err;
-        const retryable = !err.status || err.status === 429 || err.status >= 500;
+        const retryable =
+          !err.status || err.status === 429 || err.status >= 500;
         if (!retryable || n >= MAX_TRY) throw err;
         return sleep(500 * n).then(() => {
           if (signal && signal.aborted) {
@@ -67,6 +68,7 @@ export function useThemes() {
   const nextUrl = useState("th-next", () => null);
   const status = useState("th-status", () => "idle"); // idle | loading | ok | error
   const loadingMore = useState("th-more", () => false);
+  const total = useState("th-total", () => null); // jumlah tema keseluruhan (sesuai kategori + pencarian aktif)
 
   const beranda = useState("th-beranda", () => ({ status: "idle", items: [] }));
 
@@ -79,7 +81,9 @@ export function useThemes() {
       if (v !== "" && v !== null && v !== undefined && v !== 0)
         qs.push(k + "=" + encodeURIComponent(v));
     });
-    return API_BASE + "/products/websites" + (qs.length ? "?" + qs.join("&") : "");
+    return (
+      API_BASE + "/products/websites" + (qs.length ? "?" + qs.join("&") : "")
+    );
   }
 
   function loadCategories() {
@@ -89,7 +93,11 @@ export function useThemes() {
         const list = d && Array.isArray(d.data) ? d.data : [];
         categories.value = [
           ALL_CAT,
-          ...list.map((c) => ({ id: c.id, slug: c.slug, name: (c.name || "").trim() })),
+          ...list.map((c) => ({
+            id: c.id,
+            slug: c.slug,
+            name: (c.name || "").trim(),
+          })),
         ];
       })
       .catch((err) => {
@@ -103,10 +111,15 @@ export function useThemes() {
   async function fetchThemes(reset) {
     let url;
     if (reset) {
-      url = themeUrl({ q: query.value.trim(), categoryId: activeCatId.value, limit: TEMA_PER_PAGE });
+      url = themeUrl({
+        q: query.value.trim(),
+        categoryId: activeCatId.value,
+        limit: TEMA_PER_PAGE,
+      });
       nextUrl.value = null;
       loadingMore.value = false;
       themes.value = [];
+      total.value = null;
       status.value = "loading";
       if (themeAbort) themeAbort.abort();
       themeAbort = new AbortController();
@@ -118,13 +131,16 @@ export function useThemes() {
     const reqId = reset ? ++themeReq : themeReq;
     try {
       await loadCategories();
-      const d = await fetchAPI(url, { signal: themeAbort && themeAbort.signal });
+      const d = await fetchAPI(url, {
+        signal: themeAbort && themeAbort.signal,
+      });
       if (reqId !== themeReq) return; // ada request yang lebih baru
       const pg = (d && d.data) || {};
       const items = (pg.data || []).filter((t) => t.is_active !== 0);
       nextUrl.value = pg.next_page_url || null;
       themes.value = themes.value.concat(items);
       status.value = "ok";
+      if (reset) countTotal(pg, items.length, reqId);
     } catch (err) {
       if (reqId !== themeReq || (err && err.name === "AbortError")) return;
       console.error("Gagal memuat tema:", err);
@@ -134,8 +150,34 @@ export function useThemes() {
     }
   }
 
+  /** jumlah tema keseluruhan: pakai "total" dari API; kalau tidak ada, hitung dari halaman terakhir */
+  async function countTotal(pg, firstCount, id) {
+    let t =
+      pg.total != null
+        ? pg.total
+        : pg.meta && pg.meta.total != null
+          ? pg.meta.total
+          : null;
+    t = t !== null && Number.isFinite(Number(t)) ? Number(t) : null;
+    if (t === null) {
+      if (!pg.next_page_url)
+        t = firstCount; // hanya satu halaman
+      else if (pg.last_page_url && pg.last_page && pg.per_page) {
+        try {
+          const d2 = await fetchAPI(pg.last_page_url);
+          const last = ((d2 && d2.data && d2.data.data) || []).filter(
+            (x) => x.is_active !== 0,
+          ).length;
+          t = (pg.last_page - 1) * pg.per_page + last;
+        } catch (e) {}
+      }
+    }
+    if (id === themeReq) total.value = t;
+  }
+
   async function loadBeranda() {
-    if (beranda.value.status === "loading" || beranda.value.status === "ok") return;
+    if (beranda.value.status === "loading" || beranda.value.status === "ok")
+      return;
     beranda.value = { status: "loading", items: [] };
     try {
       await loadCategories();
@@ -165,13 +207,18 @@ export function useThemes() {
       let results = [];
       let url = API_BASE + "/portfolios";
       while (url) {
-        const d = await fetch(url, { headers: { Accept: "application/json" } }).then((r) => r.json());
+        const d = await fetch(url, {
+          headers: { Accept: "application/json" },
+        }).then((r) => r.json());
         results = results.concat((d.data && d.data.data) || []);
         url = (d.data && d.data.next_page_url) || null;
       }
       if (results.length) {
         try {
-          localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), data: results }));
+          localStorage.setItem(
+            KEY,
+            JSON.stringify({ ts: Date.now(), data: results }),
+          );
         } catch (e) {}
       }
       porto.value = { status: "ok", items: results };
@@ -182,7 +229,9 @@ export function useThemes() {
 
   function themeImg(t) {
     const slug = t.slug || "";
-    return t.featured_image || t.image_url || `${site}/themes/${slug}/${slug}.webp`;
+    return (
+      t.featured_image || t.image_url || `${site}/themes/${slug}/${slug}.webp`
+    );
   }
   const previewUrl = (t) => `${site}/preview/${t.slug || ""}`;
 
@@ -194,7 +243,13 @@ export function useThemes() {
         let o = d && d.data ? d.data : d || {};
         if (o.data && typeof o.data === "object") o = o.data;
         const b = {
-          name: o.brand_name || o.nama_brand || o.site_name || o.name || o.nama || "",
+          name:
+            o.brand_name ||
+            o.nama_brand ||
+            o.site_name ||
+            o.name ||
+            o.nama ||
+            "",
           logo: o.brand_logo || o.logo_url || o.logo || "",
         };
         if (!b.name && !b.logo) return;
@@ -207,9 +262,24 @@ export function useThemes() {
   }
 
   return {
-    categories, categoryMap, activeCatId, query, themes, nextUrl, status, loadingMore,
-    beranda, porto,
-    loadCategories, fetchThemes, loadBeranda, loadPorto, loadApiBrand, themeImg, previewUrl,
+    categories,
+    categoryMap,
+    activeCatId,
+    query,
+    themes,
+    nextUrl,
+    status,
+    loadingMore,
+    total,
+    beranda,
+    porto,
+    loadCategories,
+    fetchThemes,
+    loadBeranda,
+    loadPorto,
+    loadApiBrand,
+    themeImg,
+    previewUrl,
   };
 }
 
