@@ -3,7 +3,7 @@
 // Judul header diambil dari definePageMeta({ title, sub }) di tiap halaman.
 import "~/assets/css/admin.css";
 const route = useRoute();
-const { pw, profile, loadProfile, brandInfo, newCount, loadOrders, loadBrandInfo, logout } = useAdmin();
+const { pw, profile, loadProfile, brandInfo, newCount, loadOrders, loadBrandInfo, logout, saveLogo } = useAdmin();
 const { toastState, toast } = useAdminUi();
 
 useHead({
@@ -33,6 +33,59 @@ const menuOpen = ref(false);
 watch(menuOpen, (v) => document.body.classList.toggle("menu", v));
 watch(() => route.path, () => (menuOpen.value = false));
 
+/* ---- menu akun (avatar pojok kanan atas) ---- */
+const userOpen = ref(false);
+const userEl = ref(null);
+const fileEl = ref(null);
+const photoBusy = ref(false);
+let closeT;
+const canHover = () => window.matchMedia && window.matchMedia("(hover: hover)").matches;
+function onUserEnter() {
+  if (!canHover()) return;
+  clearTimeout(closeT);
+  userOpen.value = true;
+}
+function onUserLeave() {
+  if (!canHover()) return;
+  clearTimeout(closeT);
+  closeT = setTimeout(() => (userOpen.value = false), 180);
+}
+function onAvatarClick() {
+  // di desktop menu sudah terbuka lewat hover; di HP klik = buka/tutup
+  if (canHover()) userOpen.value = true;
+  else userOpen.value = !userOpen.value;
+}
+const onDocClick = (e) => {
+  if (userOpen.value && userEl.value && !userEl.value.contains(e.target)) userOpen.value = false;
+};
+watch(() => route.path, () => (userOpen.value = false));
+function pickPhoto() {
+  if (fileEl.value) fileEl.value.click();
+}
+/* foto profil = logo brand: disimpan ke kolom logo_url yang sama dengan halaman Brand & Kontak */
+async function onPhoto(e) {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  if (!/^image\//.test(f.type)) return toast("File harus berupa gambar", "err");
+  photoBusy.value = true;
+  try {
+    const url = await Promise.race([
+      shrinkImg(f, 320, "image/png"),
+      new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 15000)),
+    ]);
+    await saveLogo(url);
+  } catch (err) {
+    toast("Gambar tidak bisa dibaca, coba file lain", "err");
+  } finally {
+    photoBusy.value = false;
+  }
+}
+function doLogout() {
+  userOpen.value = false;
+  logout();
+}
+
 const refreshing = ref(false);
 async function refresh() {
   refreshing.value = true;
@@ -42,17 +95,22 @@ async function refresh() {
 }
 
 let timer;
-const onKey = (e) => e.key === "Escape" && (menuOpen.value = false);
+const onKey = (e) => {
+  if (e.key === "Escape") menuOpen.value = userOpen.value = false;
+};
 onMounted(() => {
   loadBrandInfo();
   loadProfile();
   loadOrders();
   timer = setInterval(() => loadOrders(true), 6e4); // cek pesanan baru tiap menit
   window.addEventListener("keydown", onKey);
+  document.addEventListener("click", onDocClick);
 });
 onBeforeUnmount(() => {
   clearInterval(timer);
   window.removeEventListener("keydown", onKey);
+  document.removeEventListener("click", onDocClick);
+  clearTimeout(closeT);
   document.body.classList.remove("menu");
 });
 </script>
@@ -83,7 +141,25 @@ onBeforeUnmount(() => {
         <button v-if="route.meta.refresh" class="ib" :class="{ spin: refreshing }" aria-label="Muat ulang pesanan" title="Muat ulang" @click="refresh">
           <AdminIcon name="refresh" />
         </button>
-        <div class="av">{{ avatar }}</div>
+        <div ref="userEl" class="uw" @mouseenter="onUserEnter" @mouseleave="onUserLeave">
+          <button type="button" class="av" :class="{ busy: photoBusy }" aria-haspopup="menu" :aria-expanded="userOpen" aria-label="Menu akun" @click="onAvatarClick">
+            <img v-if="brandInfo.logo" :src="brandInfo.logo" alt="" /><span v-else>{{ avatar }}</span>
+          </button>
+          <div v-show="userOpen" class="um" role="menu">
+            <div class="um-card">
+              <div class="um-head">
+                <div class="av lg"><img v-if="brandInfo.logo" :src="brandInfo.logo" alt="" /><span v-else>{{ avatar }}</span></div>
+                <div class="um-id">
+                  <b>{{ profile.name || brandInfo.name }}</b><small>{{ profile.email }}</small>
+                </div>
+              </div>
+              <NuxtLink to="/admin/pengaturan" role="menuitem"><AdminIcon name="user" />Info akun</NuxtLink>
+              <button type="button" class="mi" role="menuitem" :disabled="photoBusy" @click="pickPhoto"><AdminIcon name="edit" />{{ photoBusy ? "Mengunggah..." : "Ganti foto profil" }}</button>
+              <button type="button" class="mi out" role="menuitem" @click="doLogout"><AdminIcon name="out" />Log out</button>
+            </div>
+          </div>
+          <input ref="fileEl" type="file" accept="image/*" hidden aria-label="Upload foto profil" @change="onPhoto" />
+        </div>
       </header>
       <main><slot /></main>
     </div>

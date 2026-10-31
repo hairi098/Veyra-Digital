@@ -118,7 +118,8 @@ async function savePass() {
     <div class="card">
       <h2>Profil</h2>
       <p class="hint">
-        Nama ini tampil sebagai inisial di pojok kanan atas dashboard.
+        Nama ini tampil di menu akun pojok kanan atas. Foto profil memakai logo
+        brand (ganti lewat menu itu atau halaman Brand &amp; Kontak).
       </p>
       <form @submit.prevent="saveName">
         <label for="pf-email">Email login</label>

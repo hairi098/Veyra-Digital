@@ -486,6 +486,122 @@ small {
   align-items: center;
   justify-content: center;
   flex: none;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}
+.av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+button.av {
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+button.av:hover,
+button.av[aria-expanded="true"] {
+  box-shadow: 0 0 0 3px rgba(11, 87, 176, 0.18);
+}
+button.av.busy {
+  opacity: 0.55;
+}
+.av.lg {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+/* menu akun (avatar pojok kanan atas) */
+.uw {
+  position: relative;
+  flex: none;
+}
+.um {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  padding-top: 10px; /* jembatan hover supaya menu tidak menutup saat kursor turun */
+  z-index: 60;
+}
+.um-card {
+  width: 240px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 14px 44px rgba(2, 18, 51, 0.18);
+  animation: pop 0.14s;
+}
+.um-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 10px 12px;
+  border-bottom: 1px solid #e9f0f9;
+  margin-bottom: 6px;
+}
+.um-id {
+  min-width: 0;
+}
+.um-id b,
+.um-id small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.um-id b {
+  color: var(--dark);
+  line-height: 1.3;
+}
+.um-card a,
+.um-card button.mi {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  background: 0;
+  border-radius: 9px;
+  color: var(--tx);
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.um-card a:hover,
+.um-card button.mi:hover {
+  background: var(--tint);
+}
+.um-card button.mi:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.um-card button.mi.out {
+  color: var(--red);
+}
+.um-card button.mi.out:hover {
+  background: var(--redbg);
+}
+/* baris toggle (halaman Pembayaran) */
+.tg {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px 0;
+}
+.tg .sw {
+  margin: 2px 0 0;
+}
+.tg > div {
+  flex: 1;
+  min-width: 0;
+}
+.tg .note {
+  margin: 2px 0 0;
 }
 main {
   padding: 28px;
@@ -734,7 +850,9 @@ td select {
   position: relative;
   display: inline-block;
   width: 38px;
+  min-width: 38px;
   height: 22px;
+  flex: none; /* jangan menyusut di dalam flex (penyebab toggle rusak di HP) */
   vertical-align: middle;
 }
 .sw input {

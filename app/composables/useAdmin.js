@@ -1,5 +1,6 @@
 // Sesi + data dashboard admin. Dipakai semua halaman /admin/*.
-// Login memakai RPC `admin_login` (email:password), sesi disimpan di sessionStorage.
+// Login memakai RPC `admin_login` (email:password), sesi disimpan di localStorage
+// supaya tetap login walau tab/browser ditutup. Hilang hanya saat klik Log out.
 const PW_KEY = "adm_pw";
 let restoreP = null;
 let settingsP = null;
@@ -30,8 +31,10 @@ function emptyForm() {
 
 function store(k, v) {
   try {
-    if (v == null) sessionStorage.removeItem(k);
-    else sessionStorage.setItem(k, v);
+    if (v == null) {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k); // bersihkan sesi versi lama
+    } else localStorage.setItem(k, v);
   } catch (e) {}
 }
 
@@ -82,7 +85,12 @@ export function useAdmin() {
     if (restoreP) return restoreP;
     let saved = "";
     try {
-      saved = sessionStorage.getItem(PW_KEY) || "";
+      saved = localStorage.getItem(PW_KEY) || "";
+      if (!saved) {
+        // pindahkan sesi versi lama (sessionStorage) supaya tidak perlu login ulang
+        saved = sessionStorage.getItem(PW_KEY) || "";
+        if (saved) localStorage.setItem(PW_KEY, saved);
+      }
     } catch (e) {}
     if (!saved) return Promise.resolve(false);
     restoreP = rpc("admin_login", { p_pw: saved })
@@ -332,6 +340,40 @@ export function useAdmin() {
     } catch (e) {}
   }
 
+  /** Ganti foto profil = ganti logo brand (kolom logo_url yang sama dengan halaman Brand & Kontak).
+   *  Data lain diambil segar dari database supaya perubahan yang belum disimpan di form tidak ikut tersimpan. */
+  async function saveLogo(url) {
+    try {
+      const s = (await rpc("get_settings")) || {};
+      const brand_name = String(s.brand_name || "").trim();
+      if (!brand_name) {
+        toast("Isi nama brand dulu di Brand & Kontak", "err");
+        return false;
+      }
+      const d = {
+        brand_name,
+        logo_url: String(url || "").trim(),
+        wa_number: s.wa_number || "",
+        email: s.email || "",
+        instagram: s.instagram || "",
+        tiktok: s.tiktok || "",
+        facebook: s.facebook || "",
+      };
+      const ok = await adm("admin_save_settings", { p_data: d });
+      toast(
+        ok ? "Foto profil diperbarui" : "Gagal menyimpan foto",
+        ok ? "ok" : "err",
+      );
+      if (ok) {
+        brandInfo.value = { name: brand_name, logo: d.logo_url };
+        form.value = { ...form.value, logo: d.logo_url };
+      }
+      return !!ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function saveTemplate() {
     if (!settingsLoaded.value)
       return toast("Data belum selesai dimuat, coba lagi sebentar", "err");
@@ -382,6 +424,7 @@ export function useAdmin() {
     settingsLoaded,
     loadSettings,
     saveSettings,
+    saveLogo,
     saveTemplate,
     resetTemplate,
   };
