@@ -8,8 +8,12 @@ const tema = String(route.query.tema || "");
 if (!tema) navigateTo("/tema", { replace: true });
 
 /* ---------- paket & harga ---------- */
-const paketList = computed(() => (paket.value.length ? paket.value : DEFAULT_PAKET));
-const currentPaket = computed(() => paketList.value.find((p) => p.key === paketKey));
+const paketList = computed(() =>
+  paket.value.length ? paket.value : DEFAULT_PAKET,
+);
+const currentPaket = computed(() =>
+  paketList.value.find((p) => p.key === paketKey),
+);
 const harga = computed(() => Number(currentPaket.value?.harga) || 0);
 const paketLabel = computed(() => currentPaket.value?.nama || "-");
 
@@ -23,7 +27,8 @@ watch(
 );
 
 const unik = Math.floor(Math.random() * 899) + 100;
-const invoice = "VEY" + Math.random().toString(36).substring(2, 7).toUpperCase();
+const invoice =
+  "VEY" + Math.random().toString(36).substring(2, 7).toUpperCase();
 
 /* ---------- promo ---------- */
 const promoInput = ref("");
@@ -33,22 +38,47 @@ const promoMsg = reactive({ text: "", ok: false });
 async function applyPromo() {
   const kode = promoInput.value.trim().toUpperCase();
   if (!kode) {
-    Object.assign(promoMsg, { text: "Masukkan kode promo terlebih dahulu.", ok: false });
+    Object.assign(promoMsg, {
+      text: "Masukkan kode promo terlebih dahulu.",
+      ok: false,
+    });
     return;
   }
   try {
+    // promo bisa dibatasi admin ke paket tertentu (extra.promo_paket); ambil data terbaru
+    const x =
+      (await rpc("get_site_extra").catch(() => null)) || extra.value || {};
+    const allow = x.promo_paket && x.promo_paket[kode];
+    if (Array.isArray(allow) && allow.length && !allow.includes(paketKey)) {
+      diskon.value = 0;
+      promo.value = "";
+      Object.assign(promoMsg, {
+        text: `Kode promo ini tidak berlaku untuk ${paketLabel.value}.`,
+        ok: false,
+      });
+      return;
+    }
     const r = await rpc("check_promo", { p_kode: kode, p_harga: harga.value });
     if (r && r.valid) {
       diskon.value = r.diskon;
       promo.value = kode;
-      Object.assign(promoMsg, { text: "Kode promo berhasil diterapkan.", ok: true });
+      Object.assign(promoMsg, {
+        text: "Kode promo berhasil diterapkan.",
+        ok: true,
+      });
     } else {
       diskon.value = 0;
       promo.value = "";
-      Object.assign(promoMsg, { text: "Kode promo tidak valid atau sudah tidak berlaku.", ok: false });
+      Object.assign(promoMsg, {
+        text: "Kode promo tidak valid atau sudah tidak berlaku.",
+        ok: false,
+      });
     }
   } catch (e) {
-    Object.assign(promoMsg, { text: "Gagal mengecek promo, coba lagi.", ok: false });
+    Object.assign(promoMsg, {
+      text: "Gagal mengecek promo, coba lagi.",
+      ok: false,
+    });
   }
 }
 // harga berubah (data terbaru dari server): promo perlu dicek ulang
@@ -56,7 +86,10 @@ watch(harga, (n, o) => {
   if (o && n !== o && diskon.value > 0) {
     diskon.value = 0;
     promo.value = "";
-    Object.assign(promoMsg, { text: "Harga paket diperbarui, silakan terapkan ulang kode promo.", ok: false });
+    Object.assign(promoMsg, {
+      text: "Harga paket diperbarui, silakan terapkan ulang kode promo.",
+      ok: false,
+    });
   }
 });
 
@@ -74,12 +107,17 @@ const terms = computed(() => {
   if (!o.full && !o.dp && !o.later) o.full = true;
   return o;
 });
-const totalBayar = computed(() => Math.max(0, harga.value - unik - diskon.value));
+const totalBayar = computed(() =>
+  Math.max(0, harga.value - unik - diskon.value),
+);
 function amtFor(id) {
   const t = terms.value;
   if (id === "later") return 0;
   if (id === "dp") {
-    const d = t.dp_mode === "percent" ? Math.round((totalBayar.value * Math.min(100, t.dp_value)) / 100) : t.dp_value;
+    const d =
+      t.dp_mode === "percent"
+        ? Math.round((totalBayar.value * Math.min(100, t.dp_value)) / 100)
+        : t.dp_value;
     return Math.min(totalBayar.value, Math.max(0, d));
   }
   return totalBayar.value;
@@ -87,25 +125,44 @@ function amtFor(id) {
 const termList = computed(() => {
   const t = terms.value;
   const l = [];
-  if (t.full) l.push({ id: "full", name: "Bayar Penuh", desc: "Lunasi sekarang juga" });
+  if (t.full)
+    l.push({ id: "full", name: "Bayar Penuh", desc: "Lunasi sekarang juga" });
   if (t.dp)
     l.push({
       id: "dp",
-      name: "DP " + (t.dp_mode === "percent" ? t.dp_value + "%" : rp(t.dp_value)),
+      name:
+        "DP " + (t.dp_mode === "percent" ? t.dp_value + "%" : rp(t.dp_value)),
       desc: "Bayar sebagian dulu, sisanya menyusul",
     });
-  if (t.later) l.push({ id: "later", name: "Bayar Setelah Jadi", desc: "Tidak perlu bayar sekarang" });
+  if (t.later)
+    l.push({
+      id: "later",
+      name: "Bayar Setelah Jadi",
+      desc: "Tidak perlu bayar sekarang",
+    });
   return l;
 });
 const skemaPick = ref("");
-const skema = computed(() => (termList.value.some((x) => x.id === skemaPick.value) ? skemaPick.value : termList.value[0].id));
+const skema = computed(() =>
+  termList.value.some((x) => x.id === skemaPick.value)
+    ? skemaPick.value
+    : termList.value[0].id,
+);
 const nowAmt = computed(() => amtFor(skema.value));
 const sisaAmt = computed(() => totalBayar.value - nowAmt.value);
-const showTermBox = computed(() => termList.value.length > 1 || terms.value.note || termList.value[0].id !== "full");
-const showTail = computed(() => skema.value === "dp" || skema.value === "later");
+const showTermBox = computed(
+  () =>
+    termList.value.length > 1 ||
+    terms.value.note ||
+    termList.value[0].id !== "full",
+);
+const showTail = computed(
+  () => skema.value === "dp" || skema.value === "later",
+);
 
 function skemaLine() {
-  if (skema.value === "full") return termList.value.length > 1 ? "Skema Pembayaran: Bayar Penuh" : "";
+  if (skema.value === "full")
+    return termList.value.length > 1 ? "Skema Pembayaran: Bayar Penuh" : "";
   const x = termList.value.find((y) => y.id === skema.value);
   if (!x) return "";
   if (skema.value === "dp")
@@ -120,7 +177,14 @@ const pays = computed(() => {
   if (p.qris) l.push({ id: "qris", type: "qris", name: "QRIS", img: p.qris });
   (p.methods || []).forEach((m, i) => {
     if (m && m.name)
-      l.push({ id: "m" + i, type: m.type || "bank", name: m.name, logo: m.logo || "", no: m.no || "", an: m.an || "" });
+      l.push({
+        id: "m" + i,
+        type: m.type || "bank",
+        name: m.name,
+        logo: m.logo || "",
+        no: m.no || "",
+        an: m.an || "",
+      });
   });
   return l;
 });
@@ -148,7 +212,11 @@ function payLine() {
   const x = curPay.value;
   if (!x || nowAmt.value <= 0) return "";
   if (x.type === "qris") return "Metode Pembayaran: QRIS";
-  return "Metode Pembayaran: " + x.name + (x.no ? " (" + x.no + (x.an ? " a.n. " + x.an : "") + ")" : "");
+  return (
+    "Metode Pembayaran: " +
+    x.name +
+    (x.no ? " (" + x.no + (x.an ? " a.n. " + x.an : "") + ")" : "")
+  );
 }
 
 /* ---------- form & submit ---------- */
@@ -185,7 +253,10 @@ async function submit() {
     tpl = ls.join("\n");
   }
   const text = fillTpl(tpl, {
-    nama, kontak, acara, tema,
+    nama,
+    kontak,
+    acara,
+    tema,
     paket: paketLabel.value,
     invoice,
     harga: rp(harga.value),
@@ -193,7 +264,10 @@ async function submit() {
     diskon: rp(diskon.value),
     skema: skemaLine(),
     metode: payLine(),
-    promo: diskon.value > 0 ? `Kode Promo: ${promo.value} (-${rp(diskon.value)})` : "",
+    promo:
+      diskon.value > 0
+        ? `Kode Promo: ${promo.value} (-${rp(diskon.value)})`
+        : "",
     total: rp(totalBayar.value),
   });
   const url = `https://wa.me/${waNumber.value}?text=${encodeURIComponent(text)}`;
@@ -204,13 +278,29 @@ async function submit() {
   };
   // kalau gagal simpan, customer tetap diarahkan ke WhatsApp
   rpc("create_order", {
-    p_invoice: invoice, p_nama: nama, p_kontak: kontak, p_acara: acara, p_tema: tema,
-    p_paket: paketLabel.value, p_harga: harga.value, p_unik: unik, p_promo: promo.value,
+    p_invoice: invoice,
+    p_nama: nama,
+    p_kontak: kontak,
+    p_acara: acara,
+    p_tema: tema,
+    p_paket: paketLabel.value,
+    p_harga: harga.value,
+    p_unik: unik,
+    p_promo: promo.value,
   })
     .then(go)
     .catch(go);
 }
-const ACARA = ["Pernikahan", "Ulang Tahun", "Khitanan", "Aqiqah", "Wisuda", "Syukuran", "Reuni", "Lainnya"];
+const ACARA = [
+  "Pernikahan",
+  "Ulang Tahun",
+  "Khitanan",
+  "Aqiqah",
+  "Wisuda",
+  "Syukuran",
+  "Reuni",
+  "Lainnya",
+];
 </script>
 
 <template>
@@ -218,10 +308,18 @@ const ACARA = ["Pernikahan", "Ulang Tahun", "Khitanan", "Aqiqah", "Wisuda", "Syu
     <div class="checkout-topbar">
       <div class="container checkout-topbar-inner">
         <NuxtLink to="/" class="nav-logo checkout-logo">
-          <img class="brand-logo" :src="logo" alt="Logo" width="40" height="40" />
+          <img
+            class="brand-logo"
+            :src="logo"
+            alt="Logo"
+            width="40"
+            height="40"
+          />
           <span class="brand-name">{{ brand }}</span>
         </NuxtLink>
-        <NuxtLink to="/paket" class="checkout-back">&larr; Kembali ke Paket</NuxtLink>
+        <NuxtLink to="/paket" class="checkout-back"
+          >&larr; Kembali ke Paket</NuxtLink
+        >
       </div>
     </div>
 
@@ -230,17 +328,38 @@ const ACARA = ["Pernikahan", "Ulang Tahun", "Khitanan", "Aqiqah", "Wisuda", "Syu
         <div class="checkout-card">
           <div class="checkout-card-header">
             <h1 class="checkout-title">Konfirmasi Pesanan</h1>
-            <p class="checkout-sub">Lengkapi data pemesan, periksa ringkasan pesanan, lalu lanjutkan ke WhatsApp.</p>
+            <p class="checkout-sub">
+              Lengkapi data pemesan, periksa ringkasan pesanan, lalu lanjutkan
+              ke WhatsApp.
+            </p>
           </div>
 
-          <form id="checkoutForm" class="checkout-form" @submit.prevent="submit">
+          <form
+            id="checkoutForm"
+            class="checkout-form"
+            @submit.prevent="submit"
+          >
             <div class="form-group">
               <label for="ckNama">Nama Pemesan</label>
-              <input id="ckNama" v-model="form.nama" type="text" required placeholder="Nama Pemesan" autocomplete="name" />
+              <input
+                id="ckNama"
+                v-model="form.nama"
+                type="text"
+                required
+                placeholder="Nama Pemesan"
+                autocomplete="name"
+              />
             </div>
             <div class="form-group">
               <label for="ckKontak">Nomor WhatsApp / Email</label>
-              <input id="ckKontak" v-model="form.kontak" type="text" required placeholder="Masukkan E-Mail/WhatsApp" autocomplete="tel" />
+              <input
+                id="ckKontak"
+                v-model="form.kontak"
+                type="text"
+                required
+                placeholder="Masukkan E-Mail/WhatsApp"
+                autocomplete="tel"
+              />
             </div>
             <div class="form-group">
               <label for="ckAcara">Kategori Acara</label>
@@ -251,76 +370,204 @@ const ACARA = ["Pernikahan", "Ulang Tahun", "Khitanan", "Aqiqah", "Wisuda", "Syu
             </div>
             <div v-if="form.acara === 'Lainnya'" class="form-group">
               <label for="ckAcaraLainnya">Sebutkan Kategori Acara</label>
-              <input id="ckAcaraLainnya" v-model="form.acaraLain" type="text" required placeholder="Tulis kategori acara Anda" />
+              <input
+                id="ckAcaraLainnya"
+                v-model="form.acaraLain"
+                type="text"
+                required
+                placeholder="Tulis kategori acara Anda"
+              />
             </div>
           </form>
 
           <div class="order-summary">
             <p class="order-summary-title">Ringkasan Pesanan</p>
-            <div class="summary-row"><span>Tema Dipilih</span><span>{{ tema || "-" }}</span></div>
-            <div class="summary-row"><span>Paket Layanan</span><span>{{ paketLabel }}</span></div>
-            <div class="summary-row"><span>Nomor Invoice</span><span>{{ invoice }}</span></div>
+            <div class="summary-row">
+              <span>Tema Dipilih</span><span>{{ tema || "-" }}</span>
+            </div>
+            <div class="summary-row">
+              <span>Paket Layanan</span><span>{{ paketLabel }}</span>
+            </div>
+            <div class="summary-row">
+              <span>Nomor Invoice</span><span>{{ invoice }}</span>
+            </div>
             <hr />
-            <div class="summary-row"><span>Harga Paket</span><span>{{ rp(harga) }}</span></div>
-            <div class="summary-row unik-row"><span>Kode Unik Pembayaran</span><span>-{{ rp(unik) }}</span></div>
-            <div v-if="diskon > 0" class="summary-row discount-row" style="display: flex"><span>Diskon Promo</span><span>-{{ rp(diskon) }}</span></div>
+            <div class="summary-row">
+              <span>Harga Paket</span><span>{{ rp(harga) }}</span>
+            </div>
+            <div class="summary-row unik-row">
+              <span>Kode Unik Pembayaran</span><span>-{{ rp(unik) }}</span>
+            </div>
+            <div
+              v-if="diskon > 0"
+              class="summary-row discount-row"
+              style="display: flex"
+            >
+              <span>Diskon Promo</span><span>-{{ rp(diskon) }}</span>
+            </div>
             <hr />
-            <div class="summary-row summary-total"><span>Total Pembayaran</span><span>{{ rp(totalBayar) }}</span></div>
-            <div v-if="showTail" class="summary-row now-row" style="display: flex"><span>{{ skema === "dp" ? "Bayar Sekarang (DP)" : "Bayar Sekarang" }}</span><span>{{ rp(nowAmt) }}</span></div>
-            <div v-if="showTail" class="summary-row sisa-row" style="display: flex"><span>Sisa Pembayaran</span><span>{{ rp(sisaAmt) }}</span></div>
-            <p class="unik-note">Kode unik ditambahkan otomatis untuk mempermudah verifikasi pembayaran.</p>
+            <div class="summary-row summary-total">
+              <span>Total Pembayaran</span><span>{{ rp(totalBayar) }}</span>
+            </div>
+            <div
+              v-if="showTail"
+              class="summary-row now-row"
+              style="display: flex"
+            >
+              <span>{{
+                skema === "dp" ? "Bayar Sekarang (DP)" : "Bayar Sekarang"
+              }}</span
+              ><span>{{ rp(nowAmt) }}</span>
+            </div>
+            <div
+              v-if="showTail"
+              class="summary-row sisa-row"
+              style="display: flex"
+            >
+              <span>Sisa Pembayaran</span><span>{{ rp(sisaAmt) }}</span>
+            </div>
+            <p class="unik-note">
+              Kode unik ditambahkan otomatis untuk mempermudah verifikasi
+              pembayaran.
+            </p>
             <div class="form-group">
-              <label for="ckPromo">Kode Promo <span class="opt-label">(Opsional)</span></label>
+              <label for="ckPromo"
+                >Kode Promo <span class="opt-label">(Opsional)</span></label
+              >
               <div class="promo-row">
-                <input id="ckPromo" v-model="promoInput" type="text" placeholder="Masukkan kode promo Anda" autocomplete="off" />
-                <button type="button" class="btn-apply-promo" @click="applyPromo">Terapkan</button>
+                <input
+                  id="ckPromo"
+                  v-model="promoInput"
+                  type="text"
+                  placeholder="Masukkan kode promo Anda"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  class="btn-apply-promo"
+                  @click="applyPromo"
+                >
+                  Terapkan
+                </button>
               </div>
-              <p class="promo-msg" :class="promoMsg.text ? (promoMsg.ok ? 'promo-success' : 'promo-error') : ''">{{ promoMsg.text }}</p>
+              <p
+                class="promo-msg"
+                :class="
+                  promoMsg.text
+                    ? promoMsg.ok
+                      ? 'promo-success'
+                      : 'promo-error'
+                    : ''
+                "
+              >
+                {{ promoMsg.text }}
+              </p>
             </div>
           </div>
 
-          <div v-if="showTermBox" class="order-summary term-box" style="display: block">
+          <div
+            v-if="showTermBox"
+            class="order-summary term-box"
+            style="display: block"
+          >
             <p class="order-summary-title">Skema Pembayaran</p>
             <div class="term-opts">
-              <button v-for="x in termList" :key="x.id" type="button" class="term-opt" :class="{ active: x.id === skema }" @click="pickSkema(x.id)">
+              <button
+                v-for="x in termList"
+                :key="x.id"
+                type="button"
+                class="term-opt"
+                :class="{ active: x.id === skema }"
+                @click="pickSkema(x.id)"
+              >
                 <span class="term-radio"></span>
-                <span class="term-info"><span class="term-name">{{ x.name }}</span><span class="term-desc">{{ x.desc }}</span></span>
-                <span class="term-amt"><small>{{ x.id === "later" ? "Bayar nanti" : "Bayar sekarang" }}</small>{{ x.id === "later" ? "Rp0" : rp(amtFor(x.id)) }}</span>
+                <span class="term-info"
+                  ><span class="term-name">{{ x.name }}</span
+                  ><span class="term-desc">{{ x.desc }}</span></span
+                >
+                <span class="term-amt"
+                  ><small>{{
+                    x.id === "later" ? "Bayar nanti" : "Bayar sekarang"
+                  }}</small
+                  >{{ x.id === "later" ? "Rp0" : rp(amtFor(x.id)) }}</span
+                >
               </button>
             </div>
-            <div v-if="terms.note" class="term-note" style="display: flex"><span class="term-note-ic">i</span><span>{{ terms.note }}</span></div>
+            <div v-if="terms.note" class="term-note" style="display: flex">
+              <span class="term-note-ic">i</span><span>{{ terms.note }}</span>
+            </div>
           </div>
 
-          <div v-if="showPayBox" ref="payBoxEl" class="order-summary" style="display: block">
+          <div
+            v-if="showPayBox"
+            ref="payBoxEl"
+            class="order-summary"
+            style="display: block"
+          >
             <p class="order-summary-title">Metode Pembayaran</p>
             <div class="pay-opts">
-              <button v-for="x in pays" :key="x.id" type="button" class="pay-opt" :class="{ active: x.id === payId }" @click="pickPay(x.id)">
+              <button
+                v-for="x in pays"
+                :key="x.id"
+                type="button"
+                class="pay-opt"
+                :class="{ active: x.id === payId }"
+                @click="pickPay(x.id)"
+              >
                 <img v-if="x.logo" :src="x.logo" alt="" />
-                <span v-else class="pay-ini">{{ x.name.charAt(0).toUpperCase() }}</span>
+                <span v-else class="pay-ini">{{
+                  x.name.charAt(0).toUpperCase()
+                }}</span>
                 <span>{{ x.name }}</span>
               </button>
             </div>
             <div class="pay-detail" :class="{ show: curPay }">
               <template v-if="curPay">
-                <div class="pay-amount"><span>{{ skema === "dp" ? "DP yang dibayar sekarang" : "Total yang dibayar" }}</span><b>{{ rp(nowAmt) }}</b></div>
+                <div class="pay-amount">
+                  <span>{{
+                    skema === "dp"
+                      ? "DP yang dibayar sekarang"
+                      : "Total yang dibayar"
+                  }}</span
+                  ><b>{{ rp(nowAmt) }}</b>
+                </div>
                 <div class="pay-body">
                   <template v-if="curPay.type === 'qris'">
-                    <div class="pay-qris-wrap"><img class="pay-qris" :src="curPay.img" alt="QRIS" /></div>
-                    <p class="pay-hint pay-center">Scan QRIS di atas, lalu kirim bukti bayar lewat WhatsApp.</p>
+                    <div class="pay-qris-wrap">
+                      <img class="pay-qris" :src="curPay.img" alt="QRIS" />
+                    </div>
+                    <p class="pay-hint pay-center">
+                      Scan QRIS di atas, lalu kirim bukti bayar lewat WhatsApp.
+                    </p>
                   </template>
                   <template v-else>
                     <div class="pay-acc-top">
                       <img v-if="curPay.logo" :src="curPay.logo" alt="" />
-                      <span v-else class="pay-ini">{{ curPay.name.charAt(0).toUpperCase() }}</span>
+                      <span v-else class="pay-ini">{{
+                        curPay.name.charAt(0).toUpperCase()
+                      }}</span>
                       <div>
                         <p class="pay-bank">{{ curPay.name }}</p>
-                        <p v-if="curPay.an" class="pay-an">a.n. {{ curPay.an }}</p>
+                        <p v-if="curPay.an" class="pay-an">
+                          a.n. {{ curPay.an }}
+                        </p>
                       </div>
                     </div>
-                    <div class="pay-no-row"><div class="pay-no">{{ curPay.no }}</div><button type="button" class="pay-copy" @click="copyNo">{{ copyLabel }}</button></div>
-                    <p class="pay-hint">Transfer sesuai nominal di atas, lalu kirim bukti bayar lewat WhatsApp.</p>
+                    <div class="pay-no-row">
+                      <div class="pay-no">{{ curPay.no }}</div>
+                      <button type="button" class="pay-copy" @click="copyNo">
+                        {{ copyLabel }}
+                      </button>
+                    </div>
+                    <p class="pay-hint">
+                      Transfer sesuai nominal di atas, lalu kirim bukti bayar
+                      lewat WhatsApp.
+                    </p>
                   </template>
-                  <p v-if="skema === 'dp' && sisaAmt > 0" class="pay-hint">Sisa pembayaran {{ rp(sisaAmt) }} dilunasi sesuai kesepakatan dengan admin.</p>
+                  <p v-if="skema === 'dp' && sisaAmt > 0" class="pay-hint">
+                    Sisa pembayaran {{ rp(sisaAmt) }} dilunasi sesuai
+                    kesepakatan dengan admin.
+                  </p>
                 </div>
               </template>
             </div>
@@ -328,12 +575,20 @@ const ACARA = ["Pernikahan", "Ulang Tahun", "Khitanan", "Aqiqah", "Wisuda", "Syu
           </div>
 
           <div class="checkout-form checkout-submit-block">
-            <button type="submit" form="checkoutForm" class="btn-primary checkout-submit" :disabled="!ready || sending">
+            <button
+              type="submit"
+              form="checkoutForm"
+              class="btn-primary checkout-submit"
+              :disabled="!ready || sending"
+            >
               <template v-if="!ready">Memuat harga...</template>
               <template v-else-if="sending">Memproses...</template>
               <template v-else>Pesan Sekarang &nbsp;&rarr;</template>
             </button>
-            <p class="checkout-disclaimer">Anda akan diarahkan ke WhatsApp dengan rincian pesanan yang sudah terisi otomatis.</p>
+            <p class="checkout-disclaimer">
+              Anda akan diarahkan ke WhatsApp dengan rincian pesanan yang sudah
+              terisi otomatis.
+            </p>
           </div>
         </div>
       </div>

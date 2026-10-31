@@ -374,6 +374,28 @@ export function useAdmin() {
     }
   }
 
+  /** Atur promo berlaku di paket mana saja. keys = daftar kode paket; kosong/null = berlaku di semua paket.
+   *  Disimpan di site_extra.promo_paket ({ KODE: ["gold", "silver"] }). Data extra diambil segar dulu
+   *  supaya pengaturan lain di dalamnya tidak tertimpa. */
+  async function savePromoPaket(kode, keys) {
+    kode = String(kode || "")
+      .trim()
+      .toUpperCase();
+    if (!kode) return false;
+    try {
+      const x = (await rpc("get_site_extra")) || {};
+      const pp = { ...(x.promo_paket || {}) };
+      if (Array.isArray(keys) && keys.length) pp[kode] = keys;
+      else delete pp[kode];
+      const ex = { ...x, promo_paket: pp };
+      const ok = await adm("admin_save_site_extra", { p_data: ex });
+      if (ok) extra.value = ex;
+      return !!ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function saveTemplate() {
     if (!settingsLoaded.value)
       return toast("Data belum selesai dimuat, coba lagi sebentar", "err");
@@ -421,10 +443,12 @@ export function useAdmin() {
     paketLoaded,
     loadPaket,
     form,
+    extra,
     settingsLoaded,
     loadSettings,
     saveSettings,
     saveLogo,
+    savePromoPaket,
     saveTemplate,
     resetTemplate,
   };

@@ -4,7 +4,8 @@ definePageMeta({
   title: "Pengaturan",
   sub: "Profil, email, dan password akun admin",
 });
-const { pw, profile, loadProfile, setCredential, adm } = useAdmin();
+const { pw, profile, loadProfile, setCredential, adm, brandInfo, saveLogo } =
+  useAdmin();
 const { toast } = useAdminUi();
 
 // email login = bagian sebelum ":" pada kredensial sesi
@@ -12,6 +13,34 @@ const emailNow = computed(() => {
   const i = pw.value.indexOf(":");
   return i > 0 ? pw.value.slice(0, i) : "";
 });
+
+/* ================= foto profil (= logo brand, kolom logo_url yang sama dengan Brand & Kontak) ================= */
+const fileEl = ref(null);
+const photoBusy = ref(false);
+const initial = computed(() =>
+  (
+    (profile.value.name || profile.value.email || emailNow.value).charAt(0) ||
+    "A"
+  ).toUpperCase(),
+);
+async function onPhoto(e) {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  if (!/^image\//.test(f.type)) return toast("File harus berupa gambar", "err");
+  photoBusy.value = true;
+  try {
+    const url = await Promise.race([
+      shrinkImg(f, 320, "image/png"),
+      new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 15000)),
+    ]);
+    await saveLogo(url);
+  } catch (err) {
+    toast("Gambar tidak bisa dibaca, coba file lain", "err");
+  } finally {
+    photoBusy.value = false;
+  }
+}
 
 /* ================= profil ================= */
 const name = ref("");
@@ -119,8 +148,45 @@ async function savePass() {
       <h2>Profil</h2>
       <p class="hint">
         Nama ini tampil di menu akun pojok kanan atas. Foto profil memakai logo
-        brand (ganti lewat menu itu atau halaman Brand &amp; Kontak).
+        brand, jadi mengganti foto di sini juga mengganti logo brand.
       </p>
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin: 16px 0 4px;
+        "
+      >
+        <div class="av" style="width: 72px; height: 72px; font-size: 26px">
+          <img
+            v-if="brandInfo.logo"
+            :src="brandInfo.logo"
+            alt="Foto profil"
+          /><span v-else>{{ initial }}</span>
+        </div>
+        <div>
+          <button
+            type="button"
+            class="btn sec sm"
+            :disabled="photoBusy"
+            @click="fileEl && fileEl.click()"
+          >
+            <AdminIcon name="edit" :size="15" />{{
+              photoBusy ? "Mengunggah..." : "Ganti foto profil"
+            }}
+          </button>
+          <p class="note">Gambar diperkecil otomatis agar ringan.</p>
+          <input
+            ref="fileEl"
+            type="file"
+            accept="image/*"
+            hidden
+            aria-label="Upload foto profil"
+            @change="onPhoto"
+          />
+        </div>
+      </div>
       <form @submit.prevent="saveName">
         <label for="pf-email">Email login</label>
         <input id="pf-email" :value="emailNow" disabled />

@@ -4,10 +4,22 @@ definePageMeta({
   title: "Promo",
   sub: "Atur kode promo dan kuota pemakaian",
 });
-const { promos, promosLoaded, loadPromos, adm } = useAdmin();
+const { promos, promosLoaded, loadPromos, adm, paket, loadPaket, extra, loadSettings, savePromoPaket } = useAdmin();
 const { toast, ask } = useAdminUi();
 
-onMounted(loadPromos);
+onMounted(() => {
+  loadPromos();
+  loadPaket();
+  loadSettings();
+});
+
+/* ---- promo berlaku di paket mana saja (disimpan di extra.promo_paket) ---- */
+const pp = computed(() => (extra.value && extra.value.promo_paket) || {});
+function paketText(p) {
+  const a = pp.value[p.kode];
+  if (!Array.isArray(a) || !a.length) return "Semua paket";
+  return a.map((k) => (paket.value.find((x) => x.key === k) || {}).nama || k).join(", ");
+}
 
 const today = new Date().toISOString().slice(0, 10);
 const isExpired = (p) => p.berlaku_sampai && p.berlaku_sampai < today;
@@ -18,10 +30,13 @@ const copy = (t) => navigator.clipboard && navigator.clipboard.writeText(t).then
 const dlg = ref(null); // null = tertutup
 const editing = computed(() => !!dlg.value?.edit);
 function openNew() {
-  dlg.value = { edit: false, kode: "", tipe: "persen", nilai: "", berlaku_sampai: "", kuota: "", aktif: true };
+  dlg.value = { edit: false, kode: "", tipe: "persen", nilai: "", berlaku_sampai: "", kuota: "", aktif: true, paket: paket.value.map((x) => x.key) };
 }
 function openEdit(p) {
+  const all = paket.value.map((x) => x.key);
+  const a = pp.value[p.kode];
   dlg.value = {
+    paket: Array.isArray(a) && a.length ? all.filter((k) => a.includes(k)) : all,
     edit: true,
     kode: p.kode,
     tipe: p.tipe,
@@ -43,9 +58,19 @@ async function save() {
   };
   if (!d.kode || !d.nilai) return toast("Kode dan besar diskon wajib diisi", "err");
   if (d.tipe === "persen" && (+d.nilai < 1 || +d.nilai > 100)) return toast("Persen harus antara 1 dan 100", "err");
+  // paket yang boleh memakai kode ini (null = semua paket)
+  const all = paket.value.map((x) => x.key);
+  let sel = null;
+  if (all.length) {
+    if (!f.paket.length) return toast("Pilih minimal satu paket", "err");
+    if (f.paket.length < all.length) sel = all.filter((k) => f.paket.includes(k));
+  }
   try {
     await adm("admin_save_promo", { p_data: d });
-    toast("Promo tersimpan");
+    let ok = true;
+    if (sel || pp.value[d.kode]) ok = await savePromoPaket(d.kode, sel);
+    if (ok) toast("Promo tersimpan");
+    else toast("Promo tersimpan, tapi pilihan paket gagal disimpan. Coba simpan lagi.", "err");
     dlg.value = null;
     loadPromos();
   } catch (e) {}
@@ -72,6 +97,7 @@ async function remove(p) {
   if (!(await ask("Hapus promo?", "Kode promo ini tidak bisa dipakai lagi setelah dihapus.", "Hapus"))) return;
   try {
     await adm("admin_delete_promo", { p_id: p.id });
+    if (pp.value[p.kode]) savePromoPaket(p.kode, null);
     toast("Promo dihapus");
     loadPromos();
   } catch (e) {}
@@ -91,16 +117,17 @@ async function remove(p) {
       <div class="wrap">
         <table class="rt">
           <thead>
-            <tr><th>Kode</th><th>Diskon</th><th>Berlaku s/d</th><th>Terpakai</th><th>Aktif</th><th></th></tr>
+            <tr><th>Kode</th><th>Diskon</th><th>Paket</th><th>Berlaku s/d</th><th>Terpakai</th><th>Aktif</th><th></th></tr>
           </thead>
           <tbody>
             <tr v-if="!promosLoaded">
-              <td colspan="6" class="nl"><div class="sk"></div><div class="sk"></div></td>
+              <td colspan="7" class="nl"><div class="sk"></div><div class="sk"></div></td>
             </tr>
             <template v-else>
               <tr v-for="p in promos" :key="p.id">
                 <td data-label="Kode"><span class="code" title="Salin kode" @click="copy(p.kode)">{{ p.kode }} <AdminIcon name="copy" :size="13" /></span></td>
                 <td data-label="Diskon"><b>{{ p.tipe === "persen" ? p.nilai + "%" : rp(p.nilai) }}</b></td>
+                <td data-label="Paket"><small>{{ paketText(p) }}</small></td>
                 <td data-label="Berlaku s/d">
                   <template v-if="p.berlaku_sampai">{{ p.berlaku_sampai }} <span v-if="isExpired(p)" class="pill gold">Kedaluwarsa</span></template>
                   <span v-else class="mu">Tanpa batas</span>
@@ -122,7 +149,7 @@ async function remove(p) {
                 </td>
               </tr>
               <tr v-if="!promos.length">
-                <td colspan="6" class="nl"><div class="empty"><AdminIcon name="tag" /><b>Belum ada promo</b><span>Klik Buat promo untuk membuat kode pertamamu.</span></div></td>
+                <td colspan="7" class="nl"><div class="empty"><AdminIcon name="tag" /><b>Belum ada promo</b><span>Klik Buat promo untuk membuat kode pertamamu.</span></div></td>
               </tr>
             </template>
           </tbody>
@@ -163,6 +190,15 @@ async function remove(p) {
           </select>
         </div>
       </div>
+      <template v-if="paket.length">
+        <label>Berlaku untuk paket</label>
+        <div class="ckl">
+          <label v-for="pk in paket" :key="pk.key" class="ck">
+            <input v-model="dlg.paket" type="checkbox" :value="pk.key" /><span>{{ pk.nama }}<small v-if="!pk.aktif"> (disembunyikan)</small></span>
+          </label>
+        </div>
+        <p class="note">Centang paket yang boleh memakai kode ini. Kalau semua dicentang, kode berlaku di semua paket, termasuk paket yang ditambah nanti.</p>
+      </template>
       <template #footer>
         <button class="btn sec" @click="dlg = null">Batal</button>
         <button class="btn" @click="save">Simpan promo</button>
