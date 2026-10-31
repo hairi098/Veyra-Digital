@@ -4,8 +4,8 @@ definePageMeta({
   title: "Paket",
   sub: "Ubah harga dan isi paket layanan",
 });
-const { paket, paketLoaded, loadPaket, adm } = useAdmin();
-const { toast } = useAdminUi();
+const { paket, paketLoaded, loadPaket, adm, pw } = useAdmin();
+const { toast, ask } = useAdminUi();
 
 onMounted(loadPaket);
 
@@ -32,14 +32,16 @@ function openNew() {
     tagline: "",
     badge: "",
     aktif: true,
-    fitur: "Semua fitur undangan digital\nMasa aktif 30 hari\n-Prioritas pengerjaan",
+    fitur:
+      "Semua fitur undangan digital\nMasa aktif 30 hari\n-Prioritas pengerjaan",
   };
 }
 // kode paket terisi otomatis dari nama, selama belum diubah manual
 watch(
   () => dlg.value && dlg.value.nama,
   (v) => {
-    if (dlg.value && dlg.value.isNew && !dlg.value.keyTouched) dlg.value.key = slug(v);
+    if (dlg.value && dlg.value.isNew && !dlg.value.keyTouched)
+      dlg.value.key = slug(v);
   },
 );
 
@@ -51,7 +53,9 @@ function openEdit(p) {
     tagline: p.tagline || "",
     badge: p.badge || "",
     aktif: !!p.aktif,
-    fitur: (p.fitur || []).map((x) => (x.on === false ? "-" : "") + x.t).join("\n"),
+    fitur: (p.fitur || [])
+      .map((x) => (x.on === false ? "-" : "") + x.t)
+      .join("\n"),
   };
 }
 const preview = computed(() => (dlg.value ? parseFitur(dlg.value.fitur) : []));
@@ -71,17 +75,60 @@ async function save() {
   if (isNaN(d.harga) || d.harga < 0) return toast("Harga tidak valid", "err");
   if (f.isNew) {
     d.key = slug(d.key);
-    if (!/^[a-z0-9-]{2,30}$/.test(d.key)) return toast("Kode paket 2–30 karakter: huruf kecil, angka, atau tanda -", "err");
-    if (paket.value.some((p) => p.key === d.key)) return toast("Kode paket sudah dipakai, ganti yang lain", "err");
+    if (!/^[a-z0-9-]{2,30}$/.test(d.key))
+      return toast(
+        "Kode paket 2–30 karakter: huruf kecil, angka, atau tanda -",
+        "err",
+      );
+    if (paket.value.some((p) => p.key === d.key))
+      return toast("Kode paket sudah dipakai, ganti yang lain", "err");
   }
   try {
     const ok = await adm("admin_save_paket", { p_data: d });
-    toast(ok ? (f.isNew ? "Paket ditambahkan" : "Paket tersimpan") : "Gagal menyimpan", ok ? "ok" : "err");
+    toast(
+      ok
+        ? f.isNew
+          ? "Paket ditambahkan"
+          : "Paket tersimpan"
+        : "Gagal menyimpan",
+      ok ? "ok" : "err",
+    );
     if (ok) {
       dlg.value = null;
       loadPaket();
     }
   } catch (e) {}
+}
+
+/* ---- hapus paket (RPC admin_delete_paket, SQL-nya ada di hapus-paket.sql) ---- */
+async function remove(p) {
+  const last = paket.value.length <= 1;
+  const msg =
+    "Paket " +
+    p.nama +
+    " akan dihapus permanen dari website." +
+    (last
+      ? " Ini paket terakhir, jadi website akan memakai paket bawaan."
+      : "") +
+    " Pesanan yang sudah masuk tidak terpengaruh.";
+  if (!(await ask("Hapus paket?", msg, "Hapus"))) return;
+  try {
+    const ok = await rpc("admin_delete_paket", {
+      p_pw: pw.value,
+      p_key: p.key,
+    });
+    if (ok) {
+      toast("Paket dihapus");
+      loadPaket();
+    } else toast("Gagal menghapus paket", "err");
+  } catch (e) {
+    toast(
+      /404/.test(String((e && e.message) || ""))
+        ? "Fungsi hapus paket belum ada di database. Jalankan hapus-paket.sql di Supabase dulu."
+        : "Koneksi bermasalah, coba lagi",
+      "err",
+    );
+  }
 }
 </script>
 
@@ -91,30 +138,79 @@ async function save() {
       <div class="ch">
         <div>
           <h2>Harga &amp; isi paket</h2>
-          <p class="hint">Klik Edit untuk mengubah harga, tagline, badge, dan isi paket.</p>
+          <p class="hint">
+            Klik Edit untuk mengubah harga, tagline, badge, dan isi paket.
+          </p>
         </div>
-        <button class="btn sm" @click="openNew"><AdminIcon name="plus" :size="15" />Tambah paket</button>
+        <button class="btn sm" @click="openNew">
+          <AdminIcon name="plus" :size="15" />Tambah paket
+        </button>
       </div>
       <div class="wrap">
         <table class="rt">
           <thead>
-            <tr><th>Paket</th><th>Harga</th><th>Badge</th><th>Fitur</th><th>Status</th><th></th></tr>
+            <tr>
+              <th>Paket</th>
+              <th>Harga</th>
+              <th>Badge</th>
+              <th>Fitur</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             <tr v-if="!paketLoaded">
-              <td colspan="6" class="nl"><div class="sk"></div><div class="sk"></div></td>
+              <td colspan="6" class="nl">
+                <div class="sk"></div>
+                <div class="sk"></div>
+              </td>
             </tr>
             <template v-else>
               <tr v-for="p in paket" :key="p.key">
-                <td data-label="Paket"><b>{{ p.nama }}</b><br /><small class="mono">{{ p.key }}</small></td>
-                <td data-label="Harga"><b>{{ rp(p.harga) }}</b></td>
-                <td data-label="Badge"><span v-if="p.badge" class="pill gold">{{ p.badge }}</span><span v-else class="mu">-</span></td>
-                <td data-label="Fitur"><small>{{ (p.fitur || []).filter((f) => f.on !== false).length }} aktif dari {{ (p.fitur || []).length }}</small></td>
-                <td data-label="Status"><span class="pill">{{ p.aktif ? "Tampil" : "Disembunyikan" }}</span></td>
-                <td class="act"><button class="btn sec sm" @click="openEdit(p)"><AdminIcon name="edit" :size="15" />Edit</button></td>
+                <td data-label="Paket">
+                  <b>{{ p.nama }}</b
+                  ><br /><small class="mono">{{ p.key }}</small>
+                </td>
+                <td data-label="Harga">
+                  <b>{{ rp(p.harga) }}</b>
+                </td>
+                <td data-label="Badge">
+                  <span v-if="p.badge" class="pill gold">{{ p.badge }}</span
+                  ><span v-else class="mu">-</span>
+                </td>
+                <td data-label="Fitur">
+                  <small
+                    >{{
+                      (p.fitur || []).filter((f) => f.on !== false).length
+                    }}
+                    aktif dari {{ (p.fitur || []).length }}</small
+                  >
+                </td>
+                <td data-label="Status">
+                  <span class="pill">{{
+                    p.aktif ? "Tampil" : "Disembunyikan"
+                  }}</span>
+                </td>
+                <td class="act">
+                  <button class="btn sec sm" @click="openEdit(p)">
+                    <AdminIcon name="edit" :size="15" />Edit
+                  </button>
+                  <button
+                    class="ib r"
+                    aria-label="Hapus paket"
+                    title="Hapus paket"
+                    @click="remove(p)"
+                  >
+                    <AdminIcon name="trash" />
+                  </button>
+                </td>
               </tr>
               <tr v-if="!paket.length">
-                <td colspan="6" class="nl"><div class="empty"><AdminIcon name="card" /><b>Belum ada paket</b><span></span></div></td>
+                <td colspan="6" class="nl">
+                  <div class="empty">
+                    <AdminIcon name="card" /><b>Belum ada paket</b><span></span>
+                  </div>
+                </td>
               </tr>
             </template>
           </tbody>
@@ -122,12 +218,33 @@ async function save() {
       </div>
     </div>
 
-    <AdminDialog v-if="dlg" :title="isNew ? 'Tambah paket baru' : 'Edit paket ' + dlg.nama" wide @close="dlg = null">
+    <AdminDialog
+      v-if="dlg"
+      :title="isNew ? 'Tambah paket baru' : 'Edit paket ' + dlg.nama"
+      wide
+      @close="dlg = null"
+    >
       <div class="grid2">
-        <div><label for="pk-nama">Nama paket</label><input id="pk-nama" v-model="dlg.nama" :placeholder="isNew ? 'Gold' : ''" /></div>
-        <div><label for="pk-harga">Harga (Rp)</label><input id="pk-harga" v-model="dlg.harga" type="number" min="0" /></div>
-        <div><label for="pk-tag">Tagline</label><input id="pk-tag" v-model="dlg.tagline" /></div>
-        <div><label for="pk-badge">Badge (opsional)</label><input id="pk-badge" v-model="dlg.badge" placeholder="TERLARIS" /></div>
+        <div>
+          <label for="pk-nama">Nama paket</label
+          ><input
+            id="pk-nama"
+            v-model="dlg.nama"
+            :placeholder="isNew ? 'Gold' : ''"
+          />
+        </div>
+        <div>
+          <label for="pk-harga">Harga (Rp)</label
+          ><input id="pk-harga" v-model="dlg.harga" type="number" min="0" />
+        </div>
+        <div>
+          <label for="pk-tag">Tagline</label
+          ><input id="pk-tag" v-model="dlg.tagline" />
+        </div>
+        <div>
+          <label for="pk-badge">Badge (opsional)</label
+          ><input id="pk-badge" v-model="dlg.badge" placeholder="TERLARIS" />
+        </div>
         <div>
           <label for="pk-aktif">Status</label>
           <select id="pk-aktif" v-model="dlg.aktif">
@@ -138,18 +255,32 @@ async function save() {
       </div>
       <template v-if="isNew">
         <label for="pk-key">Kode paket</label>
-        <input id="pk-key" v-model="dlg.key" placeholder="gold" @input="dlg.keyTouched = true" />
-        <p class="note">Dipakai di link checkout (/checkout?paket={{ dlg.key || "kode" }}). Huruf kecil, angka, atau tanda -. Tidak bisa diubah setelah dibuat.</p>
+        <input
+          id="pk-key"
+          v-model="dlg.key"
+          placeholder="gold"
+          @input="dlg.keyTouched = true"
+        />
+        <p class="note">
+          Dipakai di link checkout (/checkout?paket={{ dlg.key || "kode" }}).
+          Huruf kecil, angka, atau tanda -. Tidak bisa diubah setelah dibuat.
+        </p>
       </template>
       <label for="pk-fitur">Isi paket (satu per baris)</label>
       <textarea id="pk-fitur" v-model="dlg.fitur" rows="7"></textarea>
-      <p class="note">Awali baris dengan tanda - untuk fitur yang tidak termasuk.</p>
+      <p class="note">
+        Awali baris dengan tanda - untuk fitur yang tidak termasuk.
+      </p>
       <ul class="feat">
-        <li v-for="(f, i) in preview" :key="i" :class="f.on ? 'on' : 'off'"><AdminIcon :name="f.on ? 'check' : 'x'" /><span>{{ f.t }}</span></li>
+        <li v-for="(f, i) in preview" :key="i" :class="f.on ? 'on' : 'off'">
+          <AdminIcon :name="f.on ? 'check' : 'x'" /><span>{{ f.t }}</span>
+        </li>
       </ul>
       <template #footer>
         <button class="btn sec" @click="dlg = null">Batal</button>
-        <button class="btn" @click="save">{{ isNew ? "Tambah paket" : "Simpan paket" }}</button>
+        <button class="btn" @click="save">
+          {{ isNew ? "Tambah paket" : "Simpan paket" }}
+        </button>
       </template>
     </AdminDialog>
   </section>
