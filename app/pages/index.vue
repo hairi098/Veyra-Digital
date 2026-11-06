@@ -31,7 +31,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 dibuat dan siap dibagikan dalam hitungan menit.
               </p>
               <div class="hero-actions">
-                <a
+                <!-- <a
                   :href="loginUrl"
                   target="_blank"
                   rel="noopener"
@@ -48,7 +48,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     stroke-linejoin="round"
                   >
                     <path d="M5 12h14M12 5l7 7-7 7" /></svg
-                ></a>
+                ></a> -->
                 <NuxtLink to="/tema" class="btn-secondary"><svg
                     width="16"
                     height="16"
