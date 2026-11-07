@@ -53,6 +53,14 @@ const t = computed(() => form.value.terms);
         >
           Hapus QRIS
         </button>
+        <a
+          v-if="form.qris"
+          class="btn sec sm"
+          style="margin: 8px 0 0 6px; text-decoration: none"
+          :href="form.qris"
+          download="QRIS.jpg"
+          >Download QRIS</a
+        >
         <p class="note">
           Upload foto QRIS. Kalau kosong, QRIS tidak tampil di checkout.
         </p>
