@@ -34,12 +34,12 @@ watch(here, () => (menuOpen.value = false));
       <div class="nav-links">
         <NuxtLink v-for="l in LINKS" :key="l.key" :to="l.to" class="nav-link" :class="{ active: isActive(l) }">{{ l.label }}</NuxtLink>
       </div>
-      <div class="nav-actions">
+      <!-- <div class="nav-actions">
         <a :href="loginUrl" target="_blank" rel="noopener" class="btn-login">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
           Login
         </a>
-      </div>
+      </div> -->
     </div>
   </nav>
 
@@ -50,6 +50,7 @@ watch(here, () => (menuOpen.value = false));
       <NuxtLink to="/" class="nav-logo">
         <img class="brand-logo" :src="logo" alt="Logo" width="40" height="40" />
         <span class="brand-name">{{ brand }}</span>
+      
       </NuxtLink>
       <label for="menu-toggle" class="hamburger" aria-label="Menu">
         <svg class="icon-menu-open" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--sm-dark)" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
@@ -60,12 +61,12 @@ watch(here, () => (menuOpen.value = false));
       <ul>
         <li v-for="l in LINKS" :key="l.key"><NuxtLink :to="l.to" :class="{ active: isActive(l) }">{{ l.label }}</NuxtLink></li>
       </ul>
-      <div class="menu-cta-group">
+      <!-- <div class="menu-cta-group">
         <a :href="loginUrl" target="_blank" rel="noopener" class="btn-login-full">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
           Login
         </a>
-      </div>
+      </div> -->
     </div>
   </nav>
 
